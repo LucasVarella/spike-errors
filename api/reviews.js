@@ -4,6 +4,11 @@ const redis = Redis.fromEnv();
 const KV_KEY = 'reviews';
 
 export default async function handler(req, res) {
+  const auth = req.headers.authorization;
+  if (!auth || auth !== `Bearer ${process.env.ACCESS_TOKEN}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   if (req.method === 'GET') {
     const data = await redis.get(KV_KEY);
     return res.status(200).json(data || []);
