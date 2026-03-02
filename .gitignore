@@ -1,10 +1,2 @@
-# Backups and copies
-*Copy*
-*.bak
-
-# Temp/intermediate files
-old.json
-error-reviews-auto.json
-
-# CSV raw data (large, not needed for the dashboard)
-*.csv
+local/
+.claude/
