@@ -1,0 +1,7 @@
+{
+  "name": "spike-errors-dashboard",
+  "private": true,
+  "dependencies": {
+    "@upstash/redis": "^1.36.3"
+  }
+}

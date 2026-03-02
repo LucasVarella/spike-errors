@@ -33,11 +33,16 @@ tr:hover td{background:#e8f4fd}
 .modal{background:#fff;border-radius:8px;padding:24px 28px;max-width:720px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);position:relative}
 .modal-close{position:absolute;top:12px;right:16px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;line-height:1}
 .modal-close:hover{color:#1a1a1a}
-.modal h3{font-size:1rem;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #e0e0e0}
-.modal dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:0.85rem}
-.modal dt{font-weight:700;color:#555;white-space:nowrap}
-.modal dd{margin:0;word-break:break-word}
-.modal .raw-full{background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;padding:10px 12px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;margin-top:4px}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-header .kind-tag{font-size:0.9rem;padding:4px 12px;border-radius:4px}
+.modal-header .count{font-size:1.1rem;font-weight:700;color:#555}
+.modal-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:0.82rem;color:#666;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #eee}
+.modal-meta span{font-weight:600;color:#333}
+.modal-message{background:#f8f9fa;border-left:3px solid #4fc3f7;padding:10px 14px;font-size:0.85rem;margin-bottom:14px;border-radius:0 4px 4px 0;color:#333}
+.modal-collapsible{margin-bottom:6px}
+.modal-collapsible summary{cursor:pointer;font-size:0.82rem;font-weight:700;color:#555;padding:6px 0;user-select:none}
+.modal-collapsible summary:hover{color:#1a1a1a}
+.modal-collapsible .raw-full{background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;padding:10px 12px;font-size:0.78rem;white-space:pre-wrap;word-break:break-all;max-height:250px;overflow-y:auto;margin-top:4px}
 .modal-form{margin-top:16px;padding-top:16px;border-top:2px solid #e0e0e0}
 .modal-form h4{font-size:0.9rem;margin-bottom:12px;color:#1a1a1a}
 .modal-form label{display:block;font-size:0.82rem;font-weight:700;color:#555;margin-bottom:4px;margin-top:12px}
@@ -46,6 +51,9 @@ tr:hover td{background:#e8f4fd}
 .modal-form textarea{resize:vertical;min-height:48px}
 .modal-form select{max-width:200px}
 .modal-form textarea:focus,.modal-form select:focus{outline:none;border-color:#4fc3f7;background:#fff}
+.inline-group{display:flex;gap:24px}
+.inline-group>div{flex:1}
+.inline-group label{margin-top:0!important}
 .btn{font-family:inherit;font-size:0.82rem;padding:6px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:700;background:#4fc3f7;color:#1a1a1a}
 .btn:hover{background:#39b0e4}
 .btn:disabled{opacity:0.5;cursor:not-allowed}
@@ -94,17 +102,11 @@ tr:hover td{background:#e8f4fd}
 <div class="modal-overlay" id="error-modal">
   <div class="modal">
     <button class="modal-close" id="modal-close">&times;</button>
-    <h3>Error Details</h3>
     <div id="modal-body"></div>
   </div>
 </div>
 
 <script>
-// ── Config ──
-const GITHUB_OWNER = 'LucasVarella';
-const GITHUB_REPO = 'spike-errors';
-const REVIEWS_PATH = 'reviews.json';
-
 // ── Color maps ──
 const KIND_COLORS = {
   PredictionFailedError:'#e53935', UnknownError:'#8e24aa',
@@ -128,46 +130,17 @@ function aggregate(data, key) {
   return Object.entries(m).sort((a, b) => b[1] - a[1]);
 }
 
-// ── GitHub API ──
-function getToken() {
-  let token = localStorage.getItem('gh_token');
-  if (!token) {
-    token = prompt('Enter your GitHub Personal Access Token\n(needs "repo" or "contents:write" permission):');
-    if (token) localStorage.setItem('gh_token', token);
-  }
-  return token;
-}
-
-let reviewsSha = null;
-
-async function saveReviewsToGitHub(reviewsData) {
-  const token = getToken();
-  if (!token) throw new Error('No token provided');
-
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(reviewsData, null, 2))));
-  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${REVIEWS_PATH}`;
-
-  // Get current SHA if we don't have it
-  if (!reviewsSha) {
-    const meta = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (meta.ok) { reviewsSha = (await meta.json()).sha; }
-  }
-
-  const body = { message: 'Update error reviews', content, sha: reviewsSha };
-  const res = await fetch(url, {
+// ── API ──
+async function saveReviews(reviewsData) {
+  const res = await fetch('/api/reviews', {
     method: 'PUT',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reviewsData),
   });
-
   if (!res.ok) {
-    const err = await res.json();
-    if (res.status === 401 || res.status === 403) { localStorage.removeItem('gh_token'); }
-    throw new Error(`[${res.status}] ${err.message || 'GitHub API error'}`);
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Save failed (${res.status})`);
   }
-
-  const result = await res.json();
-  reviewsSha = result.content.sha;
 }
 
 // ── State ──
@@ -196,7 +169,7 @@ function renderStats() {
   document.getElementById('kind-count').textContent = kinds.size;
   document.getElementById('provider-count').textContent = providers.size;
   document.getElementById('model-count').textContent = models.size;
-  document.getElementById('errors-total').textContent = '(' + totalCount + ' total)';
+  document.getElementById('errors-total').textContent = '(' + RAW.length + ' total)';
 }
 
 function renderErrorsTable() {
@@ -273,23 +246,34 @@ document.getElementById('errors-table-wrap').addEventListener('click', (ev) => {
   const e = SORTED_ERRORS[+idx];
   const rv = findReview(e)?.review || {};
 
-  let dl = `<dl>
-    <dt>Count</dt><dd>${e.count}</dd>
-    <dt>Kind</dt><dd><span class="kind-tag" style="background:${KIND_COLORS[e.kind] || '#999'}">${esc(e.kind)}</span></dd>
-    <dt>Current Message</dt><dd>${esc(e.message || '')}</dd>
-    <dt>Provider</dt><dd>${esc(e.provider || '(empty)')}</dd>
-    <dt>Model</dt><dd>${esc(e.model || '(empty)')}</dd>
-    <dt>Step</dt><dd>${esc(e.step_type || '(empty)')}</dd>`;
-  if (e.suggested_action) dl += `<dt>Suggested Action</dt><dd>${esc(e.suggested_action)}</dd>`;
-  if (e.details) dl += `<dt>Details</dt><dd>${esc(typeof e.details === 'object' ? JSON.stringify(e.details, null, 2) : e.details)}</dd>`;
-  dl += `<dt>Raw Error</dt><dd><div class="raw-full">${esc(e.raw_error || '')}</div></dd>`;
+  // Header: Kind + Count
+  let dl = `<div class="modal-header">
+    <span class="kind-tag" style="background:${KIND_COLORS[e.kind] || '#999'}">${esc(e.kind)}</span>
+    <span class="count">${e.count} occurrences</span>
+  </div>`;
+
+  // Meta row
+  dl += `<div class="modal-meta">
+    <div>Provider: <span>${esc(e.provider || '(empty)')}</span></div>
+    <div>Model: <span>${esc(e.model || '(empty)')}</span></div>
+    <div>Step: <span>${esc(e.step_type || '(empty)')}</span></div>
+  </div>`;
+
+  // Message
+  if (e.message) dl += `<div class="modal-message">${esc(e.message)}</div>`;
+
+  // Collapsible details
+  if (e.raw_error) dl += `<details class="modal-collapsible"><summary>Raw Error</summary><div class="raw-full">${esc(e.raw_error)}</div></details>`;
+  if (e.suggested_action) dl += `<details class="modal-collapsible"><summary>Suggested Action</summary><div class="raw-full">${esc(e.suggested_action)}</div></details>`;
+  if (e.details) dl += `<details class="modal-collapsible"><summary>Details</summary><div class="raw-full">${esc(typeof e.details === 'object' ? JSON.stringify(e.details, null, 2) : e.details)}</div></details>`;
   if (e.metrics?.metrics) {
     const mt = e.metrics.metrics;
-    if (mt.total_time != null) dl += `<dt>Total Time</dt><dd>${mt.total_time.toFixed(3)}s</dd>`;
-    if (mt.predict_time != null) dl += `<dt>Predict Time</dt><dd>${mt.predict_time.toFixed(3)}s</dd>`;
-    if (mt.logs) dl += `<dt>Logs</dt><dd><div class="raw-full">${esc(mt.logs)}</div></dd>`;
+    let metricsText = '';
+    if (mt.total_time != null) metricsText += `Total Time: ${mt.total_time.toFixed(3)}s\n`;
+    if (mt.predict_time != null) metricsText += `Predict Time: ${mt.predict_time.toFixed(3)}s\n`;
+    if (mt.logs) metricsText += `\n${mt.logs}`;
+    if (metricsText) dl += `<details class="modal-collapsible"><summary>Metrics & Logs</summary><div class="raw-full">${esc(metricsText.trim())}</div></details>`;
   }
-  dl += '</dl>';
 
   const sel = (field, val) => `
     <option value=""${!val ? ' selected' : ''}>-- Select --</option>
@@ -304,27 +288,25 @@ document.getElementById('errors-table-wrap').addEventListener('click', (ev) => {
     <textarea id="field-alt-msg" placeholder="Write a clearer message for the end user...">${esc(rv.alternative_message || '')}</textarea>
     <label for="field-reaction">Expected User Reaction</label>
     <textarea id="field-reaction" placeholder="How should the user react to this error?">${esc(rv.expected_user_reaction || '')}</textarea>
-    <label for="field-retryable">Should be Retryable?</label>
-    <select id="field-retryable">${sel('retryable', rv.should_be_retryable)}</select>
-    <label for="field-alert">Should have an alert?</label>
-    <select id="field-alert">${sel('alert', rv.should_have_alert)}</select>
+    <div class="inline-group">
+      <div>
+        <label for="field-retryable">Should be Retryable?</label>
+        <select id="field-retryable">${sel('retryable', rv.should_be_retryable)}</select>
+      </div>
+      <div>
+        <label for="field-alert">Should have an alert?</label>
+        <select id="field-alert">${sel('alert', rv.should_have_alert)}</select>
+      </div>
+    </div>
     <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
       <button class="btn" id="btn-save-review">Save</button>
       <span class="save-status" id="save-status"></span>
-      <a href="#" id="btn-change-token" style="font-size:12px;color:#78909c;margin-left:auto">Change Token</a>
     </div>
   </div>`;
 
   modal.dataset.idx = idx;
   modalBody.innerHTML = dl;
   modal.classList.add('open');
-
-  document.getElementById('btn-change-token').addEventListener('click', (ev) => {
-    ev.preventDefault();
-    localStorage.removeItem('gh_token');
-    document.getElementById('save-status').className = 'save-status';
-    document.getElementById('save-status').textContent = 'Token cleared — next save will ask for a new one.';
-  });
 
   document.getElementById('btn-save-review').addEventListener('click', async () => {
     const statusEl = document.getElementById('save-status');
@@ -350,12 +332,11 @@ document.getElementById('errors-table-wrap').addEventListener('click', (ev) => {
       });
     }
 
-    // Save to GitHub
     btn.disabled = true;
     statusEl.className = 'save-status save-pending';
     statusEl.textContent = 'Saving...';
     try {
-      await saveReviewsToGitHub(REVIEWS);
+      await saveReviews(REVIEWS);
       statusEl.className = 'save-status save-ok';
       statusEl.textContent = 'Saved!';
     } catch (err) {
@@ -371,7 +352,7 @@ document.getElementById('errors-table-wrap').addEventListener('click', (ev) => {
   try {
     const [errorsRes, reviewsRes] = await Promise.all([
       fetch('errors-unique.json'),
-      fetch('reviews.json'),
+      fetch('/api/reviews'),
     ]);
     RAW = await errorsRes.json();
     REVIEWS = await reviewsRes.json();
