@@ -9,7 +9,7 @@
       "alternative_message": "The service is temporarily unavailable due to high demand.",
       "expected_user_reaction": "Wait a few minutes and retry.",
       "should_be_retryable": "yes",
-      "should_have_alert": "yes"
+      "should_have_alert": "no"
     }
   },
   {
