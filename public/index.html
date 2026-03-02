@@ -162,15 +162,15 @@ function showLogin() {
 // ── Export CSV ──
 function exportCSV() {
   const csvEsc = (s) => '"' + String(s || '').replace(/"/g, '""') + '"';
-  const headers = ['Provider','Model','Kind','Raw Error','Category','Current User Message','Alternative Message','Expected User Reaction','Should be Retryable?','Should have an alert?','Count','Step Type','Suggested Action'];
+  const headers = ['Provider','Model','Kind','Category','Current User Message','Alternative Message','Expected User Reaction','Should be Retryable?','Should have an alert?','Count','Step Type'];
   const rows = [headers.join(',')];
   SORTED_ERRORS.forEach(e => {
     const rv = findReview(e)?.review || {};
     rows.push([
-      csvEsc(e.provider), csvEsc(e.model), csvEsc(e.kind), csvEsc(e.raw_error),
+      csvEsc(e.provider), csvEsc(e.model), csvEsc(e.kind),
       csvEsc(rv.category), csvEsc(e.message), csvEsc(rv.alternative_message),
       csvEsc(rv.expected_user_reaction), csvEsc(rv.should_be_retryable), csvEsc(rv.should_have_alert),
-      e.count, csvEsc(e.step_type), csvEsc(e.suggested_action),
+      e.count, csvEsc(e.step_type),
     ].join(','));
   });
   const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
