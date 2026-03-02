@@ -94,6 +94,7 @@ tr:hover td{background:#e8f4fd}
       <div>Kinds: <span id="kind-count">0</span></div>
       <div>Providers: <span id="provider-count">0</span></div>
       <div>Models: <span id="model-count">0</span></div>
+      <div style="margin-left:auto"><button class="btn" id="btn-export-csv" style="background:#fff;color:#1a1a1a;font-size:0.78rem;padding:4px 12px">Export CSV</button></div>
     </div>
   </header>
 
@@ -156,6 +157,27 @@ function authHeaders() { return { Authorization: `Bearer ${getToken()}` }; }
 function showLogin() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
+}
+
+// ── Export CSV ──
+function exportCSV() {
+  const csvEsc = (s) => '"' + String(s || '').replace(/"/g, '""') + '"';
+  const headers = ['Provider','Model','Kind','Raw Error','Category','Current User Message','Alternative Message','Expected User Reaction','Should be Retryable?','Should have an alert?','Count','Step Type','Suggested Action'];
+  const rows = [headers.join(',')];
+  SORTED_ERRORS.forEach(e => {
+    const rv = findReview(e)?.review || {};
+    rows.push([
+      csvEsc(e.provider), csvEsc(e.model), csvEsc(e.kind), csvEsc(e.raw_error),
+      csvEsc(rv.category), csvEsc(e.message), csvEsc(rv.alternative_message),
+      csvEsc(rv.expected_user_reaction), csvEsc(rv.should_be_retryable), csvEsc(rv.should_have_alert),
+      e.count, csvEsc(e.step_type), csvEsc(e.suggested_action),
+    ].join(','));
+  });
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'error-catalogue.csv';
+  a.click();
 }
 
 // ── API ──
@@ -264,6 +286,7 @@ function renderAll() {
 const modal = document.getElementById('error-modal');
 const modalBody = document.getElementById('modal-body');
 
+document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
 document.getElementById('modal-close').addEventListener('click', () => modal.classList.remove('open'));
 modal.addEventListener('click', (ev) => { if (ev.target === modal) modal.classList.remove('open'); });
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') modal.classList.remove('open'); });
