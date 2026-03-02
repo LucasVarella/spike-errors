@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Errors Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:#f5f5f5;color:#1a1a1a;line-height:1.5}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+header{background:#1a1a1a;color:#f5f5f5;padding:24px 32px;margin-bottom:24px;border-radius:8px}
+header h1{font-size:1.4rem;margin-bottom:8px}
+header .stats{display:flex;gap:24px;font-size:0.9rem;color:#aaa;flex-wrap:wrap}
+header .stats span{color:#4fc3f7;font-weight:700}
+.card{background:#fff;border-radius:8px;padding:20px 24px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.card h2{font-size:1.1rem;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #e0e0e0}
+table{width:100%;border-collapse:collapse;font-size:0.82rem}
+th{text-align:left;padding:8px 10px;background:#f0f0f0;border-bottom:2px solid #ddd;font-weight:700;position:sticky;top:0}
+td{padding:6px 10px;border-bottom:1px solid #eee;vertical-align:top}
+tr:nth-child(even) td{background:#fafafa}
+tr:hover td{background:#e8f4fd}
+.num{text-align:right;font-weight:700}
+.bar-cell{min-width:200px}
+.bar-wrap{display:flex;align-items:center;gap:8px}
+.bar{height:20px;border-radius:3px;min-width:2px;transition:width 0.3s}
+.bar-label{white-space:nowrap;font-weight:700;font-size:0.85rem}
+.scroll-table{max-height:600px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px}
+.kind-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:0.75rem;font-weight:600;color:#fff}
+.section-total{font-size:0.8rem;font-weight:400;color:#888;margin-left:8px}
+#errors-table-wrap tr[data-idx]{cursor:pointer}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:8px;padding:24px 28px;max-width:720px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);position:relative}
+.modal-close{position:absolute;top:12px;right:16px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;line-height:1}
+.modal-close:hover{color:#1a1a1a}
+.modal h3{font-size:1rem;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #e0e0e0}
+.modal dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:0.85rem}
+.modal dt{font-weight:700;color:#555;white-space:nowrap}
+.modal dd{margin:0;word-break:break-word}
+.modal .raw-full{background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;padding:10px 12px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;margin-top:4px}
+.modal-form{margin-top:16px;padding-top:16px;border-top:2px solid #e0e0e0}
+.modal-form h4{font-size:0.9rem;margin-bottom:12px;color:#1a1a1a}
+.modal-form label{display:block;font-size:0.82rem;font-weight:700;color:#555;margin-bottom:4px;margin-top:12px}
+.modal-form label:first-of-type{margin-top:0}
+.modal-form textarea,.modal-form select{font-family:inherit;font-size:0.82rem;width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:4px;background:#fafafa}
+.modal-form textarea{resize:vertical;min-height:48px}
+.modal-form select{max-width:200px}
+.modal-form textarea:focus,.modal-form select:focus{outline:none;border-color:#4fc3f7;background:#fff}
+.btn{font-family:inherit;font-size:0.82rem;padding:6px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:700;background:#4fc3f7;color:#1a1a1a}
+.btn:hover{background:#39b0e4}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.save-status{font-size:0.78rem;margin-left:8px;font-weight:400}
+.save-ok{color:#10b981}
+.save-err{color:#e53935}
+.save-pending{color:#f59e0b}
+.loading{text-align:center;padding:40px;color:#888;font-size:0.9rem}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Errors Dashboard</h1>
+    <p style="font-size:0.85rem;color:#aaa;margin-bottom:4px">Period: Jan 1, 2026 — Feb 25, 2026</p>
+    <div class="stats">
+      <div>Total occurrences: <span id="total-count">0</span></div>
+      <div>Unique groups: <span id="unique-count">0</span></div>
+      <div>Kinds: <span id="kind-count">0</span></div>
+      <div>Providers: <span id="provider-count">0</span></div>
+      <div>Models: <span id="model-count">0</span></div>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>1. Unique Error Ranking <span class="section-total" id="errors-total"></span></h2>
+    <div class="scroll-table" id="errors-table-wrap"><div class="loading">Loading errors...</div></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Errors by Kind <span class="section-total" id="kind-total"></span></h2>
+    <div id="kind-table-wrap"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Errors by Provider <span class="section-total" id="provider-total"></span></h2>
+    <div id="provider-table-wrap"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. Errors by Model <span class="section-total" id="model-total"></span></h2>
+    <div id="model-table-wrap"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="error-modal">
+  <div class="modal">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <h3>Error Details</h3>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ── Config ──
+const GITHUB_OWNER = 'LucasVarella';
+const GITHUB_REPO = 'spike-erros';
+const REVIEWS_PATH = 'reviews.json';
+
+// ── Color maps ──
+const KIND_COLORS = {
+  PredictionFailedError:'#e53935', UnknownError:'#8e24aa',
+  PredictionRateLimitedError:'#f57c00', PredictionRejectedError:'#d81b60',
+  PredictionEmptyResultError:'#5e35b1', MediaProcessorError:'#00897b',
+  PredictionInvalidError:'#1e88e5', ProviderNotSupportedError:'#6d4c41',
+  ProviderQuotaExceededError:'#fdd835',
+};
+const PROVIDER_COLORS = {
+  replicate:'#3b82f6', openai:'#10b981', gemini:'#f59e0b',
+  Gemini:'#f59e0b', eleven_labs:'#8b5cf6', '(empty)':'#9ca3af',
+};
+
+// ── Utilities ──
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function truncate(s, n) { return s.length > n ? s.slice(0, n) + '...' : s; }
+
+function aggregate(data, key) {
+  const m = {};
+  data.forEach(e => { const k = e[key] || '(empty)'; m[k] = (m[k] || 0) + e.count; });
+  return Object.entries(m).sort((a, b) => b[1] - a[1]);
+}
+
+// ── GitHub API ──
+function getToken() {
+  let token = localStorage.getItem('gh_token');
+  if (!token) {
+    token = prompt('Enter your GitHub Personal Access Token\n(needs "repo" or "contents:write" permission):');
+    if (token) localStorage.setItem('gh_token', token);
+  }
+  return token;
+}
+
+let reviewsSha = null;
+
+async function saveReviewsToGitHub(reviewsData) {
+  const token = getToken();
+  if (!token) throw new Error('No token provided');
+
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(reviewsData, null, 2))));
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${REVIEWS_PATH}`;
+
+  // Get current SHA if we don't have it
+  if (!reviewsSha) {
+    const meta = await fetch(url, { headers: { Authorization: `token ${token}` } });
+    if (meta.ok) { reviewsSha = (await meta.json()).sha; }
+  }
+
+  const body = { message: 'Update error reviews', content, sha: reviewsSha };
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    if (res.status === 401) { localStorage.removeItem('gh_token'); }
+    throw new Error(err.message || 'GitHub API error');
+  }
+
+  const result = await res.json();
+  reviewsSha = result.content.sha;
+}
+
+// ── State ──
+let RAW = [];
+let SORTED_ERRORS = [];
+let REVIEWS = [];
+
+function errorKey(e) {
+  return `${e.kind || e.k}|${e.provider || e.p || ''}|${e.model || e.m || ''}|${e.raw_error || e.r || ''}`;
+}
+
+function findReview(e) {
+  const key = errorKey(e);
+  return REVIEWS.find(r => errorKey(r) === key);
+}
+
+// ── Render ──
+function renderStats() {
+  const totalCount = RAW.reduce((s, e) => s + e.count, 0);
+  const kinds = new Set(RAW.map(e => e.kind));
+  const providers = new Set(RAW.map(e => e.provider || '(empty)'));
+  const models = new Set(RAW.map(e => e.model || '(empty)'));
+
+  document.getElementById('total-count').textContent = totalCount;
+  document.getElementById('unique-count').textContent = RAW.length;
+  document.getElementById('kind-count').textContent = kinds.size;
+  document.getElementById('provider-count').textContent = providers.size;
+  document.getElementById('model-count').textContent = models.size;
+  document.getElementById('errors-total').textContent = '(' + totalCount + ' total)';
+}
+
+function renderErrorsTable() {
+  SORTED_ERRORS = [...RAW].sort((a, b) => b.count - a.count);
+  let html = '<table><thead><tr><th>#</th><th>Count</th><th>Kind</th><th>Current Message</th><th>Provider</th><th>Model</th><th>Step</th></tr></thead><tbody>';
+  SORTED_ERRORS.forEach((e, i) => {
+    const color = KIND_COLORS[e.kind] || '#999';
+    html += `<tr data-idx="${i}">
+      <td class="num">${i + 1}</td>
+      <td class="num">${e.count}</td>
+      <td><span class="kind-tag" style="background:${color}">${esc(e.kind)}</span></td>
+      <td>${esc(truncate(e.message || '', 60))}</td>
+      <td>${esc(e.provider || '(empty)')}</td>
+      <td>${esc(e.model || '(empty)')}</td>
+      <td>${esc(e.step_type || '(empty)')}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('errors-table-wrap').innerHTML = html;
+}
+
+function renderBarTable(wrapperId, entries, colorMap, totalId) {
+  const total = entries.reduce((sum, [, c]) => sum + c, 0) || 1;
+  if (totalId) document.getElementById(totalId).textContent = '(' + total + ' total)';
+  const max = entries[0]?.[1] || 1;
+  let html = '<table><thead><tr><th>#</th><th>Name</th><th>Count</th><th class="bar-cell">Proportion</th></tr></thead><tbody>';
+  entries.forEach(([name, count], i) => {
+    const pct = (count / total * 100).toFixed(1);
+    const barWidth = (count / max * 100).toFixed(1);
+    const color = colorMap[name] || colorMap[name.toLowerCase?.()] || '#78909c';
+    html += `<tr>
+      <td class="num">${i + 1}</td>
+      <td>${esc(name)}</td>
+      <td class="num">${count}</td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar" style="width:${barWidth}%;background:${color}"></div><span class="bar-label">${count} (${pct}%)</span></div></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById(wrapperId).innerHTML = html;
+}
+
+function renderAll() {
+  renderStats();
+  renderErrorsTable();
+
+  // Aggregate tables use .count and short keys for aggregate
+  const agg = (key) => {
+    const m = {};
+    RAW.forEach(e => { const k = e[key] || '(empty)'; m[k] = (m[k] || 0) + e.count; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  };
+
+  renderBarTable('kind-table-wrap', agg('kind'), KIND_COLORS, 'kind-total');
+  renderBarTable('provider-table-wrap', agg('provider'), PROVIDER_COLORS, 'provider-total');
+
+  const modelEntries = agg('model');
+  const modelColors = {};
+  modelEntries.forEach(([name], i) => { modelColors[name] = `hsl(${(i * 37) % 360}, 55%, 50%)`; });
+  renderBarTable('model-table-wrap', modelEntries, modelColors, 'model-total');
+}
+
+// ── Modal ──
+const modal = document.getElementById('error-modal');
+const modalBody = document.getElementById('modal-body');
+
+document.getElementById('modal-close').addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', (ev) => { if (ev.target === modal) modal.classList.remove('open'); });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') modal.classList.remove('open'); });
+
+document.getElementById('errors-table-wrap').addEventListener('click', (ev) => {
+  const row = ev.target.closest('tr[data-idx]');
+  if (!row) return;
+  const idx = row.dataset.idx;
+  const e = SORTED_ERRORS[+idx];
+  const rv = findReview(e)?.review || {};
+
+  let dl = `<dl>
+    <dt>Count</dt><dd>${e.count}</dd>
+    <dt>Kind</dt><dd><span class="kind-tag" style="background:${KIND_COLORS[e.kind] || '#999'}">${esc(e.kind)}</span></dd>
+    <dt>Current Message</dt><dd>${esc(e.message || '')}</dd>
+    <dt>Provider</dt><dd>${esc(e.provider || '(empty)')}</dd>
+    <dt>Model</dt><dd>${esc(e.model || '(empty)')}</dd>
+    <dt>Step</dt><dd>${esc(e.step_type || '(empty)')}</dd>`;
+  if (e.suggested_action) dl += `<dt>Suggested Action</dt><dd>${esc(e.suggested_action)}</dd>`;
+  if (e.details) dl += `<dt>Details</dt><dd>${esc(typeof e.details === 'object' ? JSON.stringify(e.details, null, 2) : e.details)}</dd>`;
+  dl += `<dt>Raw Error</dt><dd><div class="raw-full">${esc(e.raw_error || '')}</div></dd>`;
+  if (e.metrics?.metrics) {
+    const mt = e.metrics.metrics;
+    if (mt.total_time != null) dl += `<dt>Total Time</dt><dd>${mt.total_time.toFixed(3)}s</dd>`;
+    if (mt.predict_time != null) dl += `<dt>Predict Time</dt><dd>${mt.predict_time.toFixed(3)}s</dd>`;
+    if (mt.logs) dl += `<dt>Logs</dt><dd><div class="raw-full">${esc(mt.logs)}</div></dd>`;
+  }
+  dl += '</dl>';
+
+  const sel = (field, val) => `
+    <option value=""${!val ? ' selected' : ''}>-- Select --</option>
+    <option value="yes"${val === 'yes' ? ' selected' : ''}>Yes</option>
+    <option value="no"${val === 'no' ? ' selected' : ''}>No</option>`;
+
+  dl += `<div class="modal-form">
+    <h4>Manual Review</h4>
+    <label for="field-category">Category</label>
+    <textarea id="field-category" placeholder="e.g. billing, moderation, infra, rate-limit...">${esc(rv.category || '')}</textarea>
+    <label for="field-alt-msg">Alternative Message (user-friendly)</label>
+    <textarea id="field-alt-msg" placeholder="Write a clearer message for the end user...">${esc(rv.alternative_message || '')}</textarea>
+    <label for="field-reaction">Expected User Reaction</label>
+    <textarea id="field-reaction" placeholder="How should the user react to this error?">${esc(rv.expected_user_reaction || '')}</textarea>
+    <label for="field-retryable">Should be Retryable?</label>
+    <select id="field-retryable">${sel('retryable', rv.should_be_retryable)}</select>
+    <label for="field-alert">Should have an alert?</label>
+    <select id="field-alert">${sel('alert', rv.should_have_alert)}</select>
+    <div style="margin-top:16px;display:flex;align-items:center">
+      <button class="btn" id="btn-save-review">Save</button>
+      <span class="save-status" id="save-status"></span>
+    </div>
+  </div>`;
+
+  modal.dataset.idx = idx;
+  modalBody.innerHTML = dl;
+  modal.classList.add('open');
+
+  document.getElementById('btn-save-review').addEventListener('click', async () => {
+    const statusEl = document.getElementById('save-status');
+    const btn = document.getElementById('btn-save-review');
+    const e2 = SORTED_ERRORS[+modal.dataset.idx];
+
+    const newReview = {
+      category: document.getElementById('field-category').value,
+      alternative_message: document.getElementById('field-alt-msg').value,
+      expected_user_reaction: document.getElementById('field-reaction').value,
+      should_be_retryable: document.getElementById('field-retryable').value,
+      should_have_alert: document.getElementById('field-alert').value,
+    };
+
+    // Update in-memory
+    const existing = findReview(e2);
+    if (existing) {
+      existing.review = newReview;
+    } else {
+      REVIEWS.push({
+        kind: e2.kind, provider: e2.provider || '', model: e2.model || '', raw_error: e2.raw_error || '',
+        review: newReview,
+      });
+    }
+
+    // Save to GitHub
+    btn.disabled = true;
+    statusEl.className = 'save-status save-pending';
+    statusEl.textContent = 'Saving...';
+    try {
+      await saveReviewsToGitHub(REVIEWS);
+      statusEl.className = 'save-status save-ok';
+      statusEl.textContent = 'Saved!';
+    } catch (err) {
+      statusEl.className = 'save-status save-err';
+      statusEl.textContent = 'Error: ' + err.message;
+    }
+    btn.disabled = false;
+  });
+});
+
+// ── Init: fetch data ──
+(async () => {
+  try {
+    const [errorsRes, reviewsRes] = await Promise.all([
+      fetch('errors-unique.json'),
+      fetch('reviews.json'),
+    ]);
+    RAW = await errorsRes.json();
+    REVIEWS = await reviewsRes.json();
+    renderAll();
+  } catch (err) {
+    document.getElementById('errors-table-wrap').innerHTML =
+      `<div class="loading" style="color:#e53935">Failed to load data: ${esc(err.message)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
